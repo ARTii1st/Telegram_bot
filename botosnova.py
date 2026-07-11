@@ -2,7 +2,7 @@ from class_osnova import Model
 from telegram import Update
 from telegram.ext import *
 
-tk = "8964274325:AAF4S2FeKVqFpZoOvEWgGKEpA9m5ouOYq8I"
+tk = ""
 length = 4096
 qwen3_code = Model("huihui_ai/qwen3-coder-abliterated:latest")
 
