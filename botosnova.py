@@ -1,62 +1,76 @@
+import asyncio
+from  menu_bota import  Menu
 from class_osnova import Model
 from telegram import Update
 from telegram.ext import *
 
 tk = ""
-length = 4096
-qwen3_code = Model("huihui_ai/qwen3-coder-abliterated:latest")
+menu = Menu()
+model = Model()
 
-def length_message(text):
-    parts = [text[i:i + length]
-        for i in range(0, len(text), length)]
-    return parts
 
-async def qwen3_coder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["model"]  = "qwen3_coder"
-    await update.message.reply_text("Вы выбрали модель qwen3_coder")
+async def menu_model():
+    print("потом реализую")
 
 async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    model = context.user_data.get("model")
-    text = update.message.text
+    if "settings" not in context.user_data or context.user_data["settings"]["model"] is None:
+        context.user_data["settings"] = {
+            "model": None,
+            "border": 700,
+            "creati": 0.7,
+            "work": asyncio.Lock(),
+        }
 
-    if model == "qwen3_coder":
+        await update.message.reply_text("Выберите модель:", reply_markup=menu.keyboard("model"))
+        return
 
+    if context.user_data["settings"]["work"].locked():
+        await update.message.reply_text(f"Уже обрабатываю ваш запрос⏳")
+        return
+
+    async with context.user_data["settings"]["work"]:
         try:
+            if update.message.text :
 
-            await update.message.reply_text(f"Qwen3_coder думает..")
+                await  model.model_ask(update,update.message.text,context.user_data["settings"])
 
-            result = await  qwen3_code.model_ask(text)
+            elif update.message.voice or update.message.audio :
 
-            if len(result) > length:
-               result_list  = length_message(result)
-               for part in result_list:
-                   await update.message.reply_text(part)
+                message = update.message.audio or update.message.voice
 
-            else:
-                await  update.message.reply_text(result)
+                file = await context.bot.get_file(message.file_id)
+
+                await file.download_to_drive(f"{message.file_unique_id}.ogg")
+
+                await model.decoder_voice(update,f"{message.file_unique_id}.ogg",context.user_data["settings"])
+
+            elif update.message.document:
+                document = update.message.document
+
+                file = await context.bot.get_file(document.file_id)
+                path = f"{document.file_name}"
+
+                await file.download_to_drive(path)
+
+                text = await model.read(update,path)
+
+                await model.model_ask(update, text, context.user_data["settings"])
+
         except Exception as ex:
             await update.message.reply_text(f"Что то пошло не так, код ошибки {ex}")
 
-    else:
-
-        await update.message.reply_text(
-            "Выберите любую модель:\n"
-            "/qwen3_coder\n"
-        )
 
 def main():
 
     app = Application.builder().token(tk).build()
 
-    app.add_handler(CommandHandler("qwen3_coder", qwen3_coder))
 
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT &  filters.AUDIO & ~filters.COMMAND,
-            message,
-        )
-    )
+    app.add_handler(CommandHandler("menu",menu_model))
+    app.add_handler(CallbackQueryHandler(menu.callback))
+
+    app.add_handler(MessageHandler((filters.TEXT |  filters.VOICE | filters.AUDIO | filters.Document.ALL )
+                                   & ~filters.COMMAND,message,))
 
     print("start 0")
 
